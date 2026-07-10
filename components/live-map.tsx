@@ -1,11 +1,17 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { MinusIcon, PlusIcon, RefreshCwIcon } from 'lucide-react'
+import { LayersIcon, RefreshCwIcon } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
-import { Switch } from '@/components/ui/switch'
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { buildPalworldProxyHeaders, buildPalworldProxyPath, getPlayerKey, normalizePlayersPayload } from '@/lib/palworld'
 import { useServer } from '@/lib/server-context'
 import type { Player } from '@/lib/types'
@@ -83,26 +89,16 @@ function toScreenPixels(position: [number, number], width: number, height: numbe
   }
 }
 
-function ControlRow({
-  label,
-  checked,
-  onCheckedChange,
-}: {
-  label: string
-  checked: boolean
-  onCheckedChange: (checked: boolean) => void
-}) {
-  return (
-    <div className="flex items-center justify-between gap-3">
-      <span className="text-sm text-foreground">{label}</span>
-      <Switch checked={checked} onCheckedChange={onCheckedChange} />
-    </div>
-  )
+type LiveMapView = 'dashboard' | 'map'
+
+interface LiveMapProps {
+  activeTab?: LiveMapView
+  onTabChange?: (tab: LiveMapView) => void
 }
 
-export function LiveMap() {
+export function LiveMap({ activeTab = 'map', onTabChange }: LiveMapProps) {
   const { config, connectionStatus, players, setPlayers } = useServer()
-  const [zoom, setZoom] = useState(2)
+  const [zoom, setZoom] = useState(0)
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [mousePosition, setMousePosition] = useState<[string, string]>(['0.00', '0.00'])
   const [showPlayers, setShowPlayers] = useState(true)
@@ -118,9 +114,11 @@ export function LiveMap() {
   const [mapSize, setMapSize] = useState({ width: MAP_SIZE_FALLBACK, height: MAP_SIZE_FALLBACK })
   const dragStartRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null)
   const mapPlaneRef = useRef<HTMLDivElement | null>(null)
+  const mapViewportRef = useRef<HTMLDivElement | null>(null)
   const nextAutoRefreshAtRef = useRef<number | null>(null)
 
-  const scale = (mapSize.width / MAP_BASIS) * (1 + zoom * 0.9) // fit at zoom 0 → ~1.1x native at max
+  // Fit basis = limiting dimension of the full-viewport container, so zoom 0 shows the whole map.
+  const scale = (Math.min(mapSize.width, mapSize.height) / MAP_BASIS) * (1 + zoom * 0.9) // fit at zoom 0 → ~1.1x native at max
   const mappablePlayers = useMemo(
     () => players.filter((player) => player.location_x !== 0 || player.location_y !== 0),
     [players]
@@ -186,7 +184,7 @@ export function LiveMap() {
   }, [])
 
   useEffect(() => {
-    const element = mapPlaneRef.current
+    const element = mapViewportRef.current
 
     if (!element) {
       return
@@ -386,7 +384,7 @@ export function LiveMap() {
 
   return (
     <div className="flex h-full w-full flex-col bg-background text-foreground">
-      <div className="flex flex-wrap items-start justify-between gap-4 border-b border-border/60 bg-card/70 p-4 backdrop-blur">
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b border-border/60 bg-card/70 px-4 py-3 backdrop-blur">
         <div>
           <div className="flex items-center gap-2 text-lg font-semibold">
             <span>Live Map V4</span>
@@ -399,6 +397,69 @@ export function LiveMap() {
             Direct image renderer with live player markers from the `players` API.
           </p>
         </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {onTabChange && (
+            <Tabs
+              value={activeTab}
+              onValueChange={(value) => onTabChange(value === 'map' ? 'map' : 'dashboard')}
+            >
+              <TabsList className="h-10 rounded-md border border-border/60 bg-muted/20">
+                <TabsTrigger value="dashboard" className="px-3 font-mono text-[11px] uppercase tracking-[0.2em] data-[state=active]:border-primary/60 data-[state=active]:bg-primary/10 data-[state=active]:text-primary sm:px-4">
+                  Dashboard
+                </TabsTrigger>
+                <TabsTrigger value="map" className="px-3 font-mono text-[11px] uppercase tracking-[0.2em] data-[state=active]:border-primary/60 data-[state=active]:bg-primary/10 data-[state=active]:text-primary sm:px-4">
+                  Live Map
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+          )}
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-10 gap-2 border-border/60 bg-muted/20 font-mono text-[11px] uppercase tracking-[0.2em]"
+              >
+                <LayersIcon className="h-3.5 w-3.5" />
+                Layers
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="center" className="w-56">
+              <DropdownMenuLabel>Map Layers</DropdownMenuLabel>
+              <DropdownMenuCheckboxItem
+                checked={showFastTravels}
+                onCheckedChange={setShowFastTravels}
+                onSelect={(event) => event.preventDefault()}
+              >
+                Fast Travel
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem
+                checked={showBossTowers}
+                onCheckedChange={setShowBossTowers}
+                onSelect={(event) => event.preventDefault()}
+              >
+                Boss Towers
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem
+                checked={showPlayers}
+                onCheckedChange={setShowPlayers}
+                onSelect={(event) => event.preventDefault()}
+              >
+                Players
+              </DropdownMenuCheckboxItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <div className="flex h-10 items-center gap-2 rounded-md border border-border/60 bg-muted/20 px-3">
+            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Cursor</span>
+            <span className="font-mono text-xs text-foreground">
+              {mousePosition[0]}, {mousePosition[1]}
+            </span>
+          </div>
+        </div>
+
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="secondary" className="bg-primary/15 text-primary hover:bg-primary/15">
             {refreshLabel}
@@ -421,200 +482,144 @@ export function LiveMap() {
         </div>
       </div>
 
-      <div className="grid flex-1 grid-cols-1 gap-4 p-4 xl:grid-cols-[18rem_1fr]">
-        <Card className="border-border/60 bg-card/85 p-4 text-foreground shadow-2xl shadow-black/20 backdrop-blur xl:h-fit">
-          <div className="space-y-4">
-            <div className="rounded-xl border border-border/60 bg-muted/35 p-3">
-              <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Zoom</div>
-              <div className="mt-1 text-2xl font-semibold">{zoom + 1}x</div>
-              <div className="mt-1 text-xs text-muted-foreground">
-                {zoom >= 6 ? 'Players ungrouped' : 'Grouping relaxes as you zoom in'}
-              </div>
-            </div>
-
-            <div className="space-y-3 rounded-xl border border-border/60 bg-muted/35 p-4">
-              <ControlRow label="Show fast travel" checked={showFastTravels} onCheckedChange={setShowFastTravels} />
-              <ControlRow label="Show boss towers" checked={showBossTowers} onCheckedChange={setShowBossTowers} />
-              <ControlRow label="Show players" checked={showPlayers} onCheckedChange={setShowPlayers} />
-            </div>
-
-            <div className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/35 px-3 py-2 text-sm">
-              <span className="text-muted-foreground">Cursor</span>
-              <span className="font-mono text-foreground">
-                {mousePosition[0]}, {mousePosition[1]}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-3 rounded-2xl border border-border/60 bg-background/45 px-3 py-4 shadow-xl">
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-9 w-9 text-foreground hover:bg-muted/60 hover:text-foreground"
-                onClick={() => setZoom((current) => clamp(current + 1, MIN_ZOOM, MAX_ZOOM))}
-              >
-                <PlusIcon className="h-4 w-4" />
-              </Button>
-              <div className="graph-line-rounded flex h-2 flex-1 items-center rounded-full bg-muted/45 p-[2px]">
-                <div
-                  className="graph-line-rounded h-full rounded-full bg-primary transition-all"
-                  style={{ width: `${((zoom + 1) / (MAX_ZOOM + 1)) * 100}%` }}
-                />
-              </div>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-9 w-9 text-foreground hover:bg-muted/60 hover:text-foreground"
-                onClick={() => setZoom((current) => clamp(current - 1, MIN_ZOOM, MAX_ZOOM))}
-              >
-                <MinusIcon className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        </Card>
-
-        <div className="flex min-h-[60vh] items-center justify-center overflow-auto rounded-2xl border border-border/60 bg-card/40 p-4">
-          <div
-            className={`relative aspect-square overflow-hidden rounded-2xl border border-border/60 bg-background/40 shadow-2xl shadow-black/20 ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
-            style={{
-              width: 'min(100%, 920px)',
-              overscrollBehavior: 'contain',
+      <div
+        ref={mapViewportRef}
+        className={`relative min-h-0 w-full flex-1 overflow-hidden bg-background/40 ${isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+        style={{ overscrollBehavior: 'contain' }}
+        onMouseMove={handleMapMouseMove}
+        onMouseDown={handleMouseDown}
+        onWheel={handleWheel}
+      >
+        <div
+          ref={mapPlaneRef}
+          className="absolute left-1/2 top-1/2 will-change-transform"
+          style={{
+            width: `${MAP_BASIS}px`,
+            height: `${MAP_BASIS}px`,
+            transform: `translate(-50%, -50%) translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
+            transformOrigin: 'center center',
+          }}
+        >
+          <img
+            src={MAP_IMAGE_URL}
+            alt="Palworld world map"
+            className="block h-full w-full select-none object-cover"
+            draggable={false}
+            onLoad={() => {
+              setMapImageLoaded(true)
+              setMapImageError(false)
             }}
-            onMouseMove={handleMapMouseMove}
-            onMouseDown={handleMouseDown}
-            onWheel={handleWheel}
-          >
-            <div
-              ref={mapPlaneRef}
-              className="absolute left-1/2 top-1/2 will-change-transform"
-              style={{
-                width: `${MAP_BASIS}px`,
-                height: `${MAP_BASIS}px`,
-                transform: `translate(-50%, -50%) translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
-                transformOrigin: 'center center',
-              }}
-            >
-              <img
-                src={MAP_IMAGE_URL}
-                alt="Palworld world map"
-                className="block h-full w-full select-none object-cover"
-                draggable={false}
-                onLoad={() => {
-                  setMapImageLoaded(true)
-                  setMapImageError(false)
-                }}
-                onError={() => {
-                  setMapImageLoaded(false)
-                  setMapImageError(true)
-                }}
-              />
+            onError={() => {
+              setMapImageLoaded(false)
+              setMapImageError(true)
+            }}
+          />
 
-              <div className="pointer-events-none absolute left-3 top-3 z-30 rounded-full border border-primary/45 bg-primary/15 px-3 py-1 text-xs font-semibold tracking-[0.2em] text-primary">
-                MAP V4
-              </div>
-
-              {showFastTravels &&
-                fastTravelMarkers.map((point) => (
-                  <img
-                    key={point.key}
-                    src="/palworld-map/fast_travel.webp"
-                    alt=""
-                    className="absolute z-20 h-7 w-7 -translate-x-1/2 -translate-y-1/2 select-none object-contain"
-                    style={point.position}
-                    draggable={false}
-                  />
-                ))}
-
-              {showBossTowers &&
-                bossTowerMarkers.map((point) => (
-                  <img
-                    key={point.key}
-                    src="/palworld-map/boss_tower.webp"
-                    alt=""
-                    className="absolute z-20 h-7 w-7 -translate-x-1/2 -translate-y-1/2 select-none object-contain"
-                    style={point.position}
-                    draggable={false}
-                  />
-                ))}
-
-              {showPlayers &&
-                playerGroups.map((group) => {
-                  const isCluster = group.players.length > 1
-                  const isHovered = hoveredGroupId === group.id
-
-                  return (
-                    <div key={group.id}>
-                      {group.players.map(({ player, x, y }, index) => {
-                        const offset = getFanoutOffset(index, group.players.length, scale)
-
-                        return (
-                          <div
-                            key={getPlayerKey(player)}
-                            className={`absolute ${isHovered ? 'z-40' : 'z-30'}`}
-                            style={{ left: `${x}px`, top: `${y}px` }}
-                            onMouseEnter={() => setHoveredGroupId(group.id)}
-                            onMouseLeave={() => setHoveredGroupId((current) => (current === group.id ? null : current))}
-                          >
-                            <div
-                              className="pointer-events-none absolute left-0 top-0 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary/45 bg-primary/35 shadow-lg shadow-primary/40"
-                              style={{ transform: `translate(-50%, -50%) scale(${1 / scale})` }}
-                            />
-                            <img
-                              src="/palworld-map/player.webp"
-                              alt=""
-                              className="absolute left-0 top-0 h-7 w-7 -translate-x-1/2 -translate-y-1/2 select-none object-contain drop-shadow-[0_6px_14px_rgba(15,23,42,0.7)]"
-                              style={{ transform: `translate(-50%, -50%) scale(${1 / scale})` }}
-                              draggable={false}
-                            />
-                            <div
-                              className="absolute left-0 top-0"
-                              style={{
-                                transform: `translate(${offset.x}px, ${offset.y}px) scale(${1 / scale})`,
-                                transformOrigin: 'center bottom',
-                              }}
-                            >
-                              <div
-                                className={`absolute left-0 top-0 whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-semibold shadow-xl transition-all ${
-                                  isCluster
-                                    ? isHovered
-                                      ? 'border-primary/45 bg-card/95 text-foreground'
-                                      : 'border-border/70 bg-card/90 text-foreground/90'
-                                    : 'border-primary/40 bg-card/92 text-foreground'
-                                }`}
-                                style={{
-                                  transform: 'translate(-50%, calc(-100% - 12px))',
-                                }}
-                              >
-                                {player.name}
-                              </div>
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )
-                })}
-            </div>
-
-            {!mapImageLoaded && !mapImageError && (
-              <div className="absolute inset-0 z-40 flex items-center justify-center bg-background/65">
-                <div className="rounded-full border border-border/70 bg-card/85 px-4 py-2 text-sm font-medium text-foreground shadow-xl backdrop-blur">
-                  Loading map image...
-                </div>
-              </div>
-            )}
-
-            {mapImageError && (
-              <div className="absolute inset-0 z-40 flex items-center justify-center bg-background/75 p-6">
-                <div className="max-w-md rounded-2xl border border-destructive/35 bg-card/90 p-5 text-center text-foreground shadow-2xl">
-                  <div className="text-lg font-semibold">Map image failed to load</div>
-                  <p className="mt-2 text-sm text-muted-foreground">
-                    The app could not load <code className="font-mono text-destructive">{MAP_IMAGE_URL}</code>.
-                  </p>
-                </div>
-              </div>
-            )}
+          <div className="pointer-events-none absolute left-3 top-3 z-30 rounded-full border border-primary/45 bg-primary/15 px-3 py-1 text-xs font-semibold tracking-[0.2em] text-primary">
+            MAP V4
           </div>
+
+          {showFastTravels &&
+            fastTravelMarkers.map((point) => (
+              <img
+                key={point.key}
+                src="/palworld-map/fast_travel.webp"
+                alt=""
+                className="absolute z-20 h-7 w-7 -translate-x-1/2 -translate-y-1/2 select-none object-contain"
+                style={point.position}
+                draggable={false}
+              />
+            ))}
+
+          {showBossTowers &&
+            bossTowerMarkers.map((point) => (
+              <img
+                key={point.key}
+                src="/palworld-map/boss_tower.webp"
+                alt=""
+                className="absolute z-20 h-7 w-7 -translate-x-1/2 -translate-y-1/2 select-none object-contain"
+                style={point.position}
+                draggable={false}
+              />
+            ))}
+
+          {showPlayers &&
+            playerGroups.map((group) => {
+              const isCluster = group.players.length > 1
+              const isHovered = hoveredGroupId === group.id
+
+              return (
+                <div key={group.id}>
+                  {group.players.map(({ player, x, y }, index) => {
+                    const offset = getFanoutOffset(index, group.players.length, scale)
+
+                    return (
+                      <div
+                        key={getPlayerKey(player)}
+                        className={`absolute ${isHovered ? 'z-40' : 'z-30'}`}
+                        style={{ left: `${x}px`, top: `${y}px` }}
+                        onMouseEnter={() => setHoveredGroupId(group.id)}
+                        onMouseLeave={() => setHoveredGroupId((current) => (current === group.id ? null : current))}
+                      >
+                        <div
+                          className="pointer-events-none absolute left-0 top-0 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary/45 bg-primary/35 shadow-lg shadow-primary/40"
+                          style={{ transform: `translate(-50%, -50%) scale(${1 / scale})` }}
+                        />
+                        <img
+                          src="/palworld-map/player.webp"
+                          alt=""
+                          className="absolute left-0 top-0 h-7 w-7 -translate-x-1/2 -translate-y-1/2 select-none object-contain drop-shadow-[0_6px_14px_rgba(15,23,42,0.7)]"
+                          style={{ transform: `translate(-50%, -50%) scale(${1 / scale})` }}
+                          draggable={false}
+                        />
+                        <div
+                          className="absolute left-0 top-0"
+                          style={{
+                            transform: `translate(${offset.x}px, ${offset.y}px) scale(${1 / scale})`,
+                            transformOrigin: 'center bottom',
+                          }}
+                        >
+                          <div
+                            className={`absolute left-0 top-0 whitespace-nowrap rounded-full border px-2 py-0.5 text-[10px] font-semibold shadow-xl transition-all ${
+                              isCluster
+                                ? isHovered
+                                  ? 'border-primary/45 bg-card/95 text-foreground'
+                                  : 'border-border/70 bg-card/90 text-foreground/90'
+                                : 'border-primary/40 bg-card/92 text-foreground'
+                            }`}
+                            style={{
+                              transform: 'translate(-50%, calc(-100% - 12px))',
+                            }}
+                          >
+                            {player.name}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })}
         </div>
+
+        {!mapImageLoaded && !mapImageError && (
+          <div className="absolute inset-0 z-40 flex items-center justify-center bg-background/65">
+            <div className="rounded-full border border-border/70 bg-card/85 px-4 py-2 text-sm font-medium text-foreground shadow-xl backdrop-blur">
+              Loading map image...
+            </div>
+          </div>
+        )}
+
+        {mapImageError && (
+          <div className="absolute inset-0 z-40 flex items-center justify-center bg-background/75 p-6">
+            <div className="max-w-md rounded-2xl border border-destructive/35 bg-card/90 p-5 text-center text-foreground shadow-2xl">
+              <div className="text-lg font-semibold">Map image failed to load</div>
+              <p className="mt-2 text-sm text-muted-foreground">
+                The app could not load <code className="font-mono text-destructive">{MAP_IMAGE_URL}</code>.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

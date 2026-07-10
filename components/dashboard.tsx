@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { DashboardHeader } from '@/components/dashboard-header'
 import { DataCard } from '@/components/data-card'
 import { OnlinePlayersPanel } from '@/components/online-players-panel'
@@ -20,10 +20,29 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useServer } from '@/lib/server-context'
 
+const ACTIVE_TAB_STORAGE_KEY = 'activeDashboardTab'
+
+type DashboardTab = 'dashboard' | 'map'
+
+function readStoredTab(): DashboardTab {
+  // Dashboard only mounts client-side (RequireServerConfig gates on post-mount
+  // config hydration), so reading localStorage in the initializer is safe.
+  if (typeof window === 'undefined') {
+    return 'dashboard'
+  }
+
+  return window.localStorage.getItem(ACTIVE_TAB_STORAGE_KEY) === 'map' ? 'map' : 'dashboard'
+}
+
 export function Dashboard() {
   const { config, connectionStatus, players, serverInfo, serverMetrics } = useServer()
   const [playersSheetOpen, setPlayersSheetOpen] = useState(false)
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'map'>('dashboard')
+  const [activeTab, setActiveTab] = useState<DashboardTab>(readStoredTab)
+
+  const handleTabChange = useCallback((tab: DashboardTab) => {
+    setActiveTab(tab)
+    window.localStorage.setItem(ACTIVE_TAB_STORAGE_KEY, tab)
+  }, [])
 
   const statusVariant = connectionStatus === 'connected'
     ? 'info'
@@ -35,11 +54,13 @@ export function Dashboard() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <DashboardHeader
-        activeTab={activeTab}
-        onTabChange={setActiveTab}
-        onPlayersClick={activeTab === 'dashboard' ? () => setPlayersSheetOpen(true) : undefined}
-      />
+      {activeTab === 'dashboard' && (
+        <DashboardHeader
+          activeTab={activeTab}
+          onTabChange={handleTabChange}
+          onPlayersClick={() => setPlayersSheetOpen(true)}
+        />
+      )}
 
       <div className="flex-1 lg:overflow-hidden">
         {activeTab === 'dashboard' ? (
@@ -148,7 +169,7 @@ export function Dashboard() {
             </div>
           </div>
         ) : (
-          <div key="map-tab" className="dashboard-tab-content dashboard-tab-content-animate mx-auto flex h-full w-full max-w-[1680px] flex-col gap-4 px-3 py-3 sm:px-4 lg:px-6 lg:py-4">
+          <div key="map-tab" className="dashboard-tab-content dashboard-tab-content-animate flex h-dvh w-full flex-col">
             <StatusBar
               variant={connectionStatus === 'connected' ? 'info' : connectionStatus === 'checking' ? 'default' : 'alert'}
               leftContent={
@@ -165,12 +186,12 @@ export function Dashboard() {
               }
             />
 
-            <div className="relative h-full w-full min-h-[calc(100vh-8.5rem)] overflow-hidden rounded-[1.75rem] border border-border bg-card/60 shadow-2xl shadow-black/20">
+            <div className="relative min-h-0 w-full flex-1 overflow-hidden bg-card/60">
               <HUDCornerFrame position="top-left" size={48} className="hidden lg:block" />
               <HUDCornerFrame position="top-right" size={48} className="hidden lg:block" />
               <HUDCornerFrame position="bottom-left" size={48} className="hidden lg:block" />
               <HUDCornerFrame position="bottom-right" size={48} className="hidden lg:block" />
-              <LiveMap />
+              <LiveMap activeTab={activeTab} onTabChange={handleTabChange} />
             </div>
           </div>
         )}
