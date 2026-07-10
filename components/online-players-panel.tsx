@@ -190,14 +190,14 @@ export function OnlinePlayersPanel() {
   const bannedPlayerIds = useMemo(() => new Set(bannedPlayers.map((player) => player.steamId)), [bannedPlayers])
 
   const filteredPlayers = useMemo(() => {
-    if (!searchQuery) {
-      return players
-    }
-
-    return players.filter((player) =>
-      player.name.toLowerCase().includes(searchQuery) ||
-      player.userId.toLowerCase().includes(searchQuery)
-    )
+    const base = searchQuery
+      ? players.filter((player) =>
+          player.name.toLowerCase().includes(searchQuery) ||
+          player.userId.toLowerCase().includes(searchQuery)
+        )
+      : players
+    // Default sort: alphabetical by display name (owner order 2026-07-10)
+    return [...base].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
   }, [players, searchQuery])
 
   return (
@@ -297,8 +297,8 @@ export function OnlinePlayersPanel() {
                     </div>
                   </div>
                   <div className="flex w-16 shrink-0 items-center justify-end gap-1 font-mono text-xs tabular-nums">
-                    <WifiIcon className={`h-3 w-3 shrink-0 ${getPingColor(Math.floor(player.ping ?? 0))}`} />
                     <span className={getPingColor(Math.floor(player.ping ?? 0))}>{Math.floor(player.ping ?? 0)}ms</span>
+                    <WifiIcon className={`h-3 w-3 shrink-0 ${getPingColor(Math.floor(player.ping ?? 0))}`} />
                   </div>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
