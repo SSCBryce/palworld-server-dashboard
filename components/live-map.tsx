@@ -127,6 +127,7 @@ export function LiveMap({ activeTab = 'map', onTabChange }: LiveMapProps) {
   const [mapSize, setMapSize] = useState({ width: MAP_SIZE_FALLBACK, height: MAP_SIZE_FALLBACK })
   const dragStartRef = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null)
   const mapPlaneRef = useRef<HTMLDivElement | null>(null)
+  const markerPlaneRef = useRef<HTMLDivElement | null>(null)
   const mapViewportRef = useRef<HTMLDivElement | null>(null)
   const nextAutoRefreshAtRef = useRef<number | null>(null)
 
@@ -147,14 +148,27 @@ export function LiveMap({ activeTab = 'map', onTabChange }: LiveMapProps) {
   // rAF-coalesce rapid view updates (wheel/drag): many events per frame -> one state commit.
   const pendingViewRef = useRef<{ scale: number; tx: number; ty: number } | null>(null)
   const rafRef = useRef<number | null>(null)
+  const settleTimerRef = useRef<number | null>(null)
   const commitView = useCallback((v: { scale: number; tx: number; ty: number }) => {
     pendingViewRef.current = v
     if (rafRef.current == null) {
       rafRef.current = requestAnimationFrame(() => {
         rafRef.current = null
-        if (pendingViewRef.current) setView(pendingViewRef.current)
+        const pv = pendingViewRef.current
+        if (!pv) return
+        // Gesture frames bypass React entirely: write the transform straight to both
+        // layers on the compositor path ("make sure it's async" — owner 2026-07-10).
+        const tf = `translate(${pv.tx}px, ${pv.ty}px) scale(${pv.scale})`
+        if (mapPlaneRef.current) mapPlaneRef.current.style.transform = tf
+        if (markerPlaneRef.current) markerPlaneRef.current.style.transform = tf
       })
     }
+    // Reconcile React state once the gesture rests (markers/grouping re-render then).
+    if (settleTimerRef.current != null) window.clearTimeout(settleTimerRef.current)
+    settleTimerRef.current = window.setTimeout(() => {
+      settleTimerRef.current = null
+      if (pendingViewRef.current) setView(pendingViewRef.current)
+    }, 150)
   }, [])
 
   // Initialize on first measure; re-clamp (and keep whole-map minimum) on viewport resize.
@@ -341,7 +355,8 @@ export function LiveMap({ activeTab = 'map', onTabChange }: LiveMapProps) {
     const mapX = -topRatio * 256
     const mapY = leftRatio * 256
 
-    setMousePosition(fromMapPosition([mapX, mapY]))
+    const next = fromMapPosition([mapX, mapY])
+    setMousePosition((cur) => (cur[0] === next[0] && cur[1] === next[1] ? cur : next))
   }, [])
 
   const handleWheel = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
@@ -379,7 +394,8 @@ export function LiveMap({ activeTab = 'map', onTabChange }: LiveMapProps) {
     }
 
     const shouldUngroup = zoom >= 6
-    const thresholdPx = shouldUngroup ? 0 : (38 * (1 - zoom / 6)) / scale
+    const groupScale = fitScale * (1 + zoom * 0.9) // from quantized zoom: stable across gesture frames
+    const thresholdPx = shouldUngroup ? 0 : (38 * (1 - zoom / 6)) / groupScale
     const positionedPlayers = mappablePlayers.map((player) => ({
       player,
       ...toScreenPixels([player.location_x, player.location_y], MAP_BASIS, MAP_BASIS),
@@ -434,7 +450,7 @@ export function LiveMap({ activeTab = 'map', onTabChange }: LiveMapProps) {
     }
 
     return groups
-  }, [mapSize.height, mapSize.width, mappablePlayers, scale, zoom])
+  }, [mappablePlayers, zoom, fitScale])
 
   const refreshLabel = useMemo(() => {
     if (!config) {
@@ -527,9 +543,6 @@ export function LiveMap({ activeTab = 'map', onTabChange }: LiveMapProps) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <Badge variant="secondary" className="bg-primary/15 text-primary hover:bg-primary/15">
-            {refreshLabel}
-          </Badge>
           <Badge variant="secondary" className="border border-border/60 bg-muted/40 text-foreground hover:bg-muted/50">
             {connectionStatus}
           </Badge>
@@ -562,9 +575,8 @@ export function LiveMap({ activeTab = 'map', onTabChange }: LiveMapProps) {
           style={{
             width: `${MAP_BASIS}px`,
             height: `${MAP_BASIS}px`,
-            transform: `translate(${view?.tx ?? 0}px, ${view?.ty ?? 0}px) scale(${scale})`,
+            transform: `translate(${(pendingViewRef.current ?? view)?.tx ?? 0}px, ${(pendingViewRef.current ?? view)?.ty ?? 0}px) scale(${(pendingViewRef.current ?? view)?.scale ?? scale})`,
             transformOrigin: '0 0',
-            transition: isDragging ? 'none' : 'transform 90ms cubic-bezier(0.2, 0, 0.2, 1)',
           }}
         >
           <img
@@ -591,13 +603,13 @@ export function LiveMap({ activeTab = 'map', onTabChange }: LiveMapProps) {
             layer's raster UNTOUCHED by 1s marker updates and zoom counter-scaling
             (owner-diagnosed repaint storm, 2026-07-10) */}
         <div
+          ref={markerPlaneRef}
           className="pointer-events-none absolute left-0 top-0 will-change-transform"
           style={{
             width: `${MAP_BASIS}px`,
             height: `${MAP_BASIS}px`,
-            transform: `translate(${view?.tx ?? 0}px, ${view?.ty ?? 0}px) scale(${scale})`,
+            transform: `translate(${(pendingViewRef.current ?? view)?.tx ?? 0}px, ${(pendingViewRef.current ?? view)?.ty ?? 0}px) scale(${(pendingViewRef.current ?? view)?.scale ?? scale})`,
             transformOrigin: '0 0',
-            transition: isDragging ? 'none' : 'transform 90ms cubic-bezier(0.2, 0, 0.2, 1)',
           }}
         >
           {showFastTravels &&
