@@ -64,18 +64,21 @@ export function ConsolePanel() {
           Clear
         </Button>
       </div>
-      <DataStream
-        title="SYSTEM TERMINAL"
-        entries={
-          streamEntries.length > 0
-            ? streamEntries
-            : [{ text: 'NO LOGS YET. API RESPONSES WILL APPEAR HERE.', type: 'warning' as const }]
-        }
-        maxVisible={10}
-        streaming={streamEntries.length > 0}
-        hideScrollbar
-        className="min-h-[10rem] sm:min-h-[14rem]"
-      />
+      {/* Fill the grid cell: absolute inset feed never drives row height, scrolls internally. */}
+      <div className="relative min-h-[10rem] flex-1 sm:min-h-[14rem]">
+        <DataStream
+          title="SYSTEM TERMINAL"
+          entries={
+            streamEntries.length > 0
+              ? streamEntries
+              : [{ text: 'NO LOGS YET. API RESPONSES WILL APPEAR HERE.', type: 'warning' as const }]
+          }
+          fill
+          streaming={streamEntries.length > 0}
+          hideScrollbar
+          className="absolute inset-0"
+        />
+      </div>
     </div>
   )
 }

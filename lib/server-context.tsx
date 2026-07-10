@@ -6,8 +6,8 @@ import type { ServerConfig, Player, ConsoleLog, ServerInfo, ServerMetrics, Banne
 
 type ConnectionStatus = 'disconnected' | 'checking' | 'connected'
 
-const FPS_HISTORY_WINDOW_MS = 30 * 60 * 1000
-const FPS_HISTORY_MAX_SAMPLES = 360
+const FPS_HISTORY_WINDOW_MS = 4 * 60 * 60 * 1000
+const FPS_HISTORY_MAX_SAMPLES = 2880 // 4h at the 5s metrics cadence
 const METRICS_POLL_INTERVAL_MS = 5 * 1000 // owner fix 2026-07-10: 60s starved the FPS graph; 5s matches the 360-sample/30-min buffer design
 const LEGACY_FPS_HISTORY_STORAGE_KEY = 'fpsHistory'
 const DEFAULT_GAME_PORT = '8211'

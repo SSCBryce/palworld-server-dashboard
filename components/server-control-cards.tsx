@@ -29,7 +29,7 @@ import {
   SearchIcon
 } from 'lucide-react'
 
-const FPS_HISTORY_WINDOW_MS = 30 * 60 * 1000
+const FPS_HISTORY_WINDOW_MS = 4 * 60 * 60 * 1000
 
 function PanelSection({
   title,
@@ -71,7 +71,7 @@ function getQuickMessageToneClass(preset: PresetMessage) {
   return QUICK_MESSAGE_TONE_CLASS[preset.tone ?? 'neutral']
 }
 
-const PRESET_MESSAGES: PresetMessage[] = [
+const RESTART_PRESET_MESSAGES: PresetMessage[] = [
   {
     label: '⚠ Restart in 1 min',
     message: '⚠ Server will restart in 1 minute. Please find a safe spot!',
@@ -106,21 +106,39 @@ const PRESET_MESSAGES: PresetMessage[] = [
       { delayMs: 590_000, message: '⚠ Server restarting in 10 seconds!' },
     ],
   },
-  { label: 'Maintenance soon', message: 'Maintenance starting soon. Server will go offline briefly.', tone: 'warning' },
-  { label: 'Save complete',    message: 'World has been saved successfully.', tone: 'success' },
-  { label: 'Admin online',     message: 'An admin is online. Play fair!', tone: 'info' },
-  { label: 'Restart complete', message: '✅ Server restart complete. Welcome back!', tone: 'success' },
-  { label: 'Backup running', message: '💾 Backup is now running. Temporary lag may occur.', tone: 'warning' },
-  { label: 'Backup complete', message: '✅ Backup complete. Thank you for your patience.', tone: 'success' },
-  { label: 'Prepare to save', message: 'Saving world in 60 seconds. Please avoid risky actions.', tone: 'warning' },
-  { label: 'PvP event soon', message: '⚔ PvP event starts in 5 minutes. Gear up and meet at base!', tone: 'info' },
-  { label: 'Server full soon', message: 'Server population is high. Slots may fill up soon.', tone: 'warning' },
-  { label: 'High latency', message: '⚠ High latency detected. We are monitoring server performance.', tone: 'warning' },
-  { label: 'Rules reminder', message: 'Reminder: Keep chat respectful and avoid griefing.', tone: 'info' },
-  { label: 'Admin maintenance', message: 'Admin tools maintenance in progress. Some actions may be delayed.', tone: 'warning' },
 ]
-const RESTART_PRESET_MESSAGES = PRESET_MESSAGES.filter((preset) => Array.isArray(preset.reminders))
-const GENERAL_PRESET_MESSAGES = PRESET_MESSAGES.filter((preset) => !preset.reminders)
+
+// Quick messages grouped for the Announcements card: info/status first,
+// then event/gameplay callouts, then maintenance/warning-adjacent last.
+const QUICK_MESSAGE_GROUPS: { label: string; presets: PresetMessage[] }[] = [
+  {
+    label: 'Info & Status',
+    presets: [
+      { label: 'Admin online',     message: 'An admin is online. Play fair!', tone: 'info' },
+      { label: 'Rules reminder',   message: 'Reminder: Keep chat respectful and avoid griefing.', tone: 'info' },
+      { label: 'Save complete',    message: 'World has been saved successfully.', tone: 'success' },
+      { label: 'Backup complete',  message: '✅ Backup complete. Thank you for your patience.', tone: 'success' },
+      { label: 'Restart complete', message: '✅ Server restart complete. Welcome back!', tone: 'success' },
+    ],
+  },
+  {
+    label: 'Events & Gameplay',
+    presets: [
+      { label: 'PvP event soon',   message: '⚔ PvP event starts in 5 minutes. Gear up and meet at base!', tone: 'info' },
+      { label: 'Server full soon', message: 'Server population is high. Slots may fill up soon.', tone: 'warning' },
+    ],
+  },
+  {
+    label: 'Maintenance & Warnings',
+    presets: [
+      { label: 'Prepare to save',   message: 'Saving world in 60 seconds. Please avoid risky actions.', tone: 'warning' },
+      { label: 'Backup running',    message: '💾 Backup is now running. Temporary lag may occur.', tone: 'warning' },
+      { label: 'High latency',      message: '⚠ High latency detected. We are monitoring server performance.', tone: 'warning' },
+      { label: 'Maintenance soon',  message: 'Maintenance starting soon. Server will go offline briefly.', tone: 'warning' },
+      { label: 'Admin maintenance', message: 'Admin tools maintenance in progress. Some actions may be delayed.', tone: 'warning' },
+    ],
+  },
+]
 
 export function AnnouncementCard() {
   const { apiCall, isLoading } = useServer()
@@ -149,21 +167,30 @@ export function AnnouncementCard() {
     <PanelSection title="Announcements" subtitle="Broadcast Channel" status="active">
         <div className="space-y-2">
           <p className="text-xs font-medium text-muted-foreground">Quick Messages</p>
-          <div className="flex flex-wrap gap-1.5">
-            {GENERAL_PRESET_MESSAGES.map((preset) => (
-              <Button
-                key={preset.label}
-                onClick={() => setMessage(preset.message)}
-                type="button"
-                variant="outline"
-                size="sm"
-                className={cn(
-                  "h-auto whitespace-normal px-2 py-1 text-left text-xs",
-                  getQuickMessageToneClass(preset)
-                )}
-              >
-                {preset.label}
-              </Button>
+          <div className="space-y-2.5">
+            {QUICK_MESSAGE_GROUPS.map((group) => (
+              <div key={group.label} className="space-y-1">
+                <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-muted-foreground/70">
+                  {group.label}
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {group.presets.map((preset) => (
+                    <Button
+                      key={preset.label}
+                      onClick={() => setMessage(preset.message)}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className={cn(
+                        "h-auto whitespace-normal px-2 py-1 text-left text-xs",
+                        getQuickMessageToneClass(preset)
+                      )}
+                    >
+                      {preset.label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
         </div>
@@ -524,13 +551,45 @@ export function BanManagementCard() {
   )
 }
 
+function formatAxisAge(ms: number) {
+  if (ms < 60_000) return `-${Math.max(1, Math.round(ms / 1000))}s`
+  if (ms < 3_600_000) return `-${Math.round(ms / 60_000)}m`
+  const hours = Math.round((ms / 3_600_000) * 10) / 10
+  return `-${Number.isInteger(hours) ? hours.toFixed(0) : hours.toFixed(1)}h`
+}
+
 function FpsHistoryGraph({
   samples,
   currentFps,
+  pollIntervalMs,
 }: {
   samples: { timestamp: number; fps: number }[]
   currentFps: number | null
+  pollIntervalMs: number
 }) {
+  // Measure the chart area so the SVG viewBox maps 1:1 to CSS pixels —
+  // no letterboxing/stretching at any container width.
+  const chartAreaRef = React.useRef<HTMLDivElement | null>(null)
+  const [chartSize, setChartSize] = React.useState({ width: 640, height: 160 })
+
+  React.useEffect(() => {
+    const element = chartAreaRef.current
+    if (!element || typeof ResizeObserver === 'undefined') return
+
+    const observer = new ResizeObserver((entries) => {
+      const rect = entries[entries.length - 1]?.contentRect
+      if (!rect || rect.width <= 0 || rect.height <= 0) return
+      setChartSize((previous) =>
+        previous.width === rect.width && previous.height === rect.height
+          ? previous
+          : { width: rect.width, height: rect.height }
+      )
+    })
+
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
+
   const getFpsTextColorClass = (fps: number | null) => {
     if (fps == null) {
       return 'text-muted-foreground'
@@ -571,31 +630,42 @@ function FpsHistoryGraph({
     [axisMin, axisRange]
   )
 
+  const orderedSamples = React.useMemo(
+    () => [...chartSamples].sort((a, b) => a.timestamp - b.timestamp),
+    [chartSamples]
+  )
+  const sampleSpanMs = orderedSamples.length > 1
+    ? orderedSamples[orderedSamples.length - 1].timestamp - orderedSamples[0].timestamp
+    : 0
+
   const pointString = React.useMemo(() => {
-    if (chartSamples.length === 0) {
+    if (orderedSamples.length === 0) {
       return ''
     }
 
-    const orderedSamples = [...chartSamples].sort((a, b) => a.timestamp - b.timestamp)
+    const { width, height } = chartSize
     const firstTimestamp = orderedSamples[0]?.timestamp ?? 0
     const lastTimestamp = orderedSamples[orderedSamples.length - 1]?.timestamp ?? firstTimestamp
     const timestampSpan = Math.max(lastTimestamp - firstTimestamp, 1)
+    const yPadding = height * 0.06
 
     return orderedSamples
       .map((sample) => {
         const x = orderedSamples.length === 1
-          ? 50
-          : ((sample.timestamp - firstTimestamp) / timestampSpan) * 100
+          ? width / 2
+          : ((sample.timestamp - firstTimestamp) / timestampSpan) * width
         const normalizedY = (sample.fps - axisMin) / axisRange
-        const y = 100 - normalizedY * 100
-        return `${Math.min(Math.max(x, 0), 100)},${Math.min(Math.max(y, 6), 94)}`
+        const y = height - normalizedY * height
+        const clampedX = Math.min(Math.max(x, 0), width)
+        const clampedY = Math.min(Math.max(y, yPadding), height - yPadding)
+        return `${clampedX.toFixed(1)},${clampedY.toFixed(1)}`
       })
       .join(' ')
-  }, [axisMin, axisRange, chartSamples])
+  }, [axisMin, axisRange, chartSize, orderedSamples])
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="font-mono text-[10px] uppercase tracking-[0.28em] text-muted-foreground">Server FPS</p>
           <div className="mt-1 flex items-end gap-2">
@@ -605,9 +675,14 @@ function FpsHistoryGraph({
             <span className="pb-1 font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">Live</span>
           </div>
         </div>
-        <Badge variant="secondary" className="font-mono text-[10px] uppercase tracking-[0.2em]">
-          30 Minute History
-        </Badge>
+        <div className="flex items-center gap-3">
+          <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+            Metrics · every {Math.floor(pollIntervalMs / 1000)}s
+          </span>
+          <Badge variant="secondary" className="font-mono text-[10px] uppercase tracking-[0.2em]">
+            4 Hour History
+          </Badge>
+        </div>
       </div>
 
       <div className="rounded-xl border border-border/60 bg-muted/15 p-3">
@@ -618,8 +693,15 @@ function FpsHistoryGraph({
             ))}
           </div>
 
-          <div className="relative h-40 flex-1 overflow-hidden rounded-lg border border-primary/20 bg-gradient-to-b from-primary/8 via-transparent to-transparent">
-            <svg viewBox="0 0 100 100" className="absolute inset-0 h-full w-full">
+          <div
+            ref={chartAreaRef}
+            className="relative h-40 flex-1 overflow-hidden rounded-lg border border-primary/20 bg-gradient-to-b from-primary/8 via-transparent to-transparent"
+          >
+            <svg
+              viewBox={`0 0 ${chartSize.width} ${chartSize.height}`}
+              preserveAspectRatio="none"
+              className="absolute inset-0 h-full w-full"
+            >
               <defs>
                 <linearGradient id="fpsLineGradient" x1="0" y1="0" x2="1" y2="0">
                   <stop offset="0%" stopColor="currentColor" stopOpacity="0.35" />
@@ -627,27 +709,27 @@ function FpsHistoryGraph({
                 </linearGradient>
               </defs>
 
-              {Array.from({ length: 11 }, (_, index) => index * 10).map((line) => (
+              {Array.from({ length: 11 }, (_, index) => index).map((index) => (
                 <line
-                  key={`h-${line}`}
+                  key={`h-${index}`}
                   x1="0"
-                  x2="100"
-                  y1={line}
-                  y2={line}
-                  className={line % 20 === 0 ? 'stroke-border/45' : 'stroke-border/25'}
+                  x2={chartSize.width}
+                  y1={(index / 10) * chartSize.height}
+                  y2={(index / 10) * chartSize.height}
+                  className={index % 2 === 0 ? 'stroke-border/45' : 'stroke-border/25'}
                   strokeDasharray="2 3"
                   vectorEffect="non-scaling-stroke"
                 />
               ))}
 
-              {Array.from({ length: 11 }, (_, index) => index * 10).map((line) => (
+              {Array.from({ length: 11 }, (_, index) => index).map((index) => (
                 <line
-                  key={`v-${line}`}
+                  key={`v-${index}`}
                   y1="0"
-                  y2="100"
-                  x1={line}
-                  x2={line}
-                  className={line % 20 === 0 ? 'stroke-border/40' : 'stroke-border/20'}
+                  y2={chartSize.height}
+                  x1={(index / 10) * chartSize.width}
+                  x2={(index / 10) * chartSize.width}
+                  className={index % 2 === 0 ? 'stroke-border/40' : 'stroke-border/20'}
                   strokeDasharray="2 3"
                   vectorEffect="non-scaling-stroke"
                 />
@@ -676,8 +758,8 @@ function FpsHistoryGraph({
         </div>
 
         <div className="mt-3 flex items-center justify-between font-mono text-[10px] uppercase tracking-[0.24em] text-muted-foreground">
-          <span>-30m</span>
-          <span>-15m</span>
+          <span>{sampleSpanMs > 0 ? formatAxisAge(sampleSpanMs) : '-4h'}</span>
+          <span>{sampleSpanMs > 0 ? formatAxisAge(sampleSpanMs / 2) : '-2h'}</span>
           <span>Now</span>
         </div>
       </div>
@@ -736,9 +818,13 @@ export function MetricsCard() {
       status={serverMetrics ? 'active' : 'pending'}
       className="min-h-0"
     >
-      <FpsHistoryGraph samples={fpsHistory} currentFps={serverMetrics?.serverfps ?? null} />
+      <FpsHistoryGraph
+        samples={fpsHistory}
+        currentFps={serverMetrics?.serverfps ?? null}
+        pollIntervalMs={metricsPollIntervalMs}
+      />
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
         <MetricTile
           label="Players"
           value={serverMetrics ? `${players.length}/${serverMetrics.maxplayernum}` : `${players.length}`}
@@ -750,7 +836,6 @@ export function MetricsCard() {
         <MetricTile label="Uptime" value={uptime} />
         <MetricTile label="World Day" value={serverMetrics?.days != null ? `${serverMetrics.days}` : 'N/A'} />
         <MetricTile label="Bases" value={serverMetrics?.basecampnum != null ? `${serverMetrics.basecampnum}` : 'N/A'} />
-        <MetricTile label="Polling" value={`Metrics · every ${Math.floor(metricsPollIntervalMs / 1000)}s`} />
       </div>
     </PanelSection>
   )

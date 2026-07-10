@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { InfoPanel } from '@/components/status-bar'
 import { useServer } from '@/lib/server-context'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -35,7 +34,6 @@ import {
   UserIcon,
   BanIcon,
   UnlockIcon,
-  UsersIcon,
   ClockIcon,
   WifiIcon,
   EyeIcon,
@@ -307,12 +305,9 @@ export function OnlinePlayersPanel() {
 
   return (
     <aside className="flex h-full w-80 min-h-0">
-      <InfoPanel title="Online Players" subtitle="Personnel Ledger" status="active" className="flex h-full min-h-0 w-full flex-col">
-        <div className="mb-4 flex items-center gap-2">
-          <UsersIcon className="w-4 h-4 text-primary" />
-          <h2 className="font-semibold text-foreground">Roster</h2>
-        </div>
-
+      {/* Dechromed sidebar (owner order): InfoPanel container styling kept, no title/subtitle/icon rows —
+          starts straight at the search + refresh controls. */}
+      <div className="relative flex h-full min-h-0 w-full flex-col overflow-hidden rounded border border-border/50 bg-card/50 p-3 backdrop-blur-sm sm:p-4">
         <div className="space-y-3">
           <div className="relative">
             <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white" />
@@ -380,7 +375,7 @@ export function OnlinePlayersPanel() {
           )}
         </div>
       </ScrollArea>
-      </InfoPanel>
+      </div>
 
       {/* Confirmation Dialog */}
       <AlertDialog open={!!confirmAction} onOpenChange={() => setConfirmAction(null)}>

@@ -68,9 +68,6 @@ export function Dashboard() {
                       <div className="p-3 sm:p-4 lg:p-6">
                         <div className="mb-6">
                           <h2 className="font-mono text-lg font-semibold uppercase tracking-[0.14em] text-foreground sm:text-2xl sm:tracking-[0.24em]">Dashboard Overview</h2>
-                          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-                            Operate your Palworld server with live HUD panels, moderation tools, diagnostics, and real-time control surfaces.
-                          </p>
                         </div>
 
                         {/* Hero: live performance */}
