@@ -61,6 +61,10 @@ interface PlayerRosterProps {
 // (OnlinePlayersPanel) and by the mod-tier ModWidget. Extracted 2026-07-10
 // for the two-tier password build — behavior matches the former inline
 // sidebar rendering exactly.
+// Accounts hidden from the MOD-tier widget only (owner order 2026-07-10). Exact
+// userId match — cannot collide with anyone else. Admin sidebar shows everyone.
+const MOD_WIDGET_HIDDEN_USERIDS = new Set<string>(['steam_76561198067175705'])
+
 export function PlayerRoster({ search, onAfterAction, variant = 'sidebar', className }: PlayerRosterProps) {
   const { apiCall, players, addBannedPlayer, bannedPlayers, removeBannedPlayer } = useServer()
   const [confirmAction, setConfirmAction] = useState<{ type: 'kick' | 'ban'; player: Player } | null>(null)
@@ -147,9 +151,12 @@ export function PlayerRoster({ search, onAfterAction, variant = 'sidebar', class
           player.userId.toLowerCase().includes(searchQuery)
         )
       : players
+    const scoped = variant === 'widget'
+      ? base.filter((player) => !MOD_WIDGET_HIDDEN_USERIDS.has(player.userId))
+      : base
     // Default sort: alphabetical by display name (owner order 2026-07-10)
-    return [...base].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
-  }, [players, searchQuery])
+    return [...scoped].sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
+  }, [players, searchQuery, variant])
 
   const watchedPlayers = useMemo(() => filteredPlayers.filter((p) => watchlist.has(getPlayerKey(p))), [filteredPlayers, watchlist])
   const regularPlayers = useMemo(() => filteredPlayers.filter((p) => !watchlist.has(getPlayerKey(p))), [filteredPlayers, watchlist])

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { classifyPassword, tierForClass } from '@/lib/access-tier'
+import { clientIp, isLockedOut, recordFailure } from '@/lib/rate-limit'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -21,5 +22,13 @@ export async function POST(request: NextRequest) {
     // Malformed or missing JSON body → invalid
   }
 
-  return NextResponse.json({ tier: tierForClass(classifyPassword(password)) })
+  const ip = clientIp(request)
+  if (isLockedOut(ip)) {
+    return NextResponse.json({ tier: 'invalid', error: 'rate_limited' }, { status: 429 })
+  }
+  const passwordClass = classifyPassword(password)
+  if (passwordClass === 'unknown') {
+    recordFailure(ip)
+  }
+  return NextResponse.json({ tier: tierForClass(passwordClass) })
 }

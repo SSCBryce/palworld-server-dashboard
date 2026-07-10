@@ -1,6 +1,7 @@
 import { Buffer } from 'node:buffer'
 import { NextRequest, NextResponse } from 'next/server'
 import { classifyPassword } from '@/lib/access-tier'
+import { clientIp, isLockedOut, recordFailure } from '@/lib/rate-limit'
 import { PALWORLD_PROXY_HEADERS } from '@/lib/palworld'
 import type { AccessTier } from '@/lib/types'
 
@@ -151,6 +152,20 @@ function parseProxyResponse(text: string) {
 }
 
 async function proxyPalworldRequest(request: NextRequest, { params }: RouteContext, method: 'GET' | 'POST') {
+  // Brute-force limiter: block IPs with >=4 failed auth attempts in 4 min entirely
+  // for the window; count only invalid-password attempts so valid polling is unaffected.
+  const ip = clientIp(request)
+  if (isLockedOut(ip)) {
+    return NextResponse.json({ error: 'Too many attempts. Try again later.' }, { status: 429 })
+  }
+  const presented =
+    request.headers.get(PALWORLD_PROXY_HEADERS.adminPassword) ??
+    request.nextUrl.searchParams.get('adminPassword') ??
+    ''
+  if (classifyPassword(presented) === 'unknown') {
+    recordFailure(ip)
+  }
+
   const serverConfig = getServerConfig(request)
 
   if (!serverConfig) {
