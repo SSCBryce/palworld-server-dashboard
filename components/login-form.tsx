@@ -196,7 +196,7 @@ export function LoginForm() {
     () => [
       { text: 'INITIALIZING ADMIN INTERFACE', type: 'system' as const },
       { text: 'LOADING SERVER LINK PROTOCOLS', type: 'output' as const },
-      { text: 'VERIFY PALWORLD REST ENDPOINT', type: 'output' as const },
+      { text: 'VERIFY KANAPALS REST ENDPOINT', type: 'output' as const },
       { text: 'LIVE VALIDATION MONITOR ARMED', type: 'system' as const },
       { text: 'AWAITING OPERATOR PASSWORD', type: 'input' as const },
       ...bootValidationLines,
@@ -311,7 +311,7 @@ export function LoginForm() {
           variant="info"
           leftContent={
             <>
-              <span>PALWORLD CONTROL GRID</span>
+              <span>KANAPALS CONTROL GRID</span>
               <span>AUTHENTICATION REQUIRED</span>
             </>
           }
@@ -328,7 +328,7 @@ export function LoginForm() {
           />
 
           <InfoPanel
-            title="Palworld Server Admin"
+            title="kanapals Server Admin"
             subtitle="REST Link Authentication"
             status="active"
             className="w-full border-border/60 bg-card/80"
