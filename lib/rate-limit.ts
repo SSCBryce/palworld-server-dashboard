@@ -8,9 +8,19 @@ const MAX_FAILURES = 4
 const failures = new Map<string, number[]>()
 
 export function clientIp(request: { headers: Headers }): string {
+  // Behind exactly one trusted proxy (perlica-edge). Prefer its single-value
+  // real-ip header; otherwise take the LAST X-Forwarded-For token — the value
+  // the trusted edge appended (its observed peer). A client-supplied XFF prefix
+  // therefore cannot spoof past the limiter. Falls to 'local' (fails closed:
+  // all direct-LAN callers share one bucket) if no proxy header is present.
+  const realIp = request.headers.get('x-real-ip')
+  if (realIp) return realIp.trim()
   const xff = request.headers.get('x-forwarded-for')
-  if (xff) return xff.split(',')[0]!.trim()
-  return request.headers.get('x-real-ip') ?? 'local'
+  if (xff) {
+    const parts = xff.split(',').map((s) => s.trim()).filter(Boolean)
+    if (parts.length > 0) return parts[parts.length - 1]!
+  }
+  return 'local'
 }
 
 function recent(ip: string, now: number): number[] {
