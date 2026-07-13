@@ -73,7 +73,7 @@ export function OnlinePlayersPanel() {
 
   // Restart interval when refreshRate changes (no immediate fetch)
   useEffect(() => {
-    const interval = setInterval(() => fetchPlayers(), refreshRate * 1000) // SECONDS (owner: 1s; was minutes)
+    const interval = setInterval(() => fetchPlayers(), refreshRate * 1000) // SECONDS (default 10s, floor 5s — owner 2026-07-13)
     return () => clearInterval(interval)
   }, [fetchPlayers, refreshRate])
 
@@ -121,8 +121,8 @@ export function OnlinePlayersPanel() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="1">1 sec</SelectItem>
                 <SelectItem value="5">5 sec</SelectItem>
+                <SelectItem value="10">10 sec</SelectItem>
                 <SelectItem value="15">15 sec</SelectItem>
                 <SelectItem value="60">60 sec</SelectItem>
               </SelectContent>
