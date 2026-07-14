@@ -13,10 +13,13 @@ type ConnectionStatus = 'disconnected' | 'checking' | 'connected'
 const FPS_HISTORY_WINDOW_MS = 1 * 60 * 60 * 1000
 const FPS_HISTORY_MAX_SAMPLES = 720 // 1h at the sampler's 5s cadence
 
-// Owner order 2026-07-14: ONE combined snapshot request (metrics + players +
-// fps history) on a FIXED 15s cadence via /api/server-snapshot. No separate
-// metrics/roster polls, no user-configurable poll rates.
-const SNAPSHOT_POLL_INTERVAL_MS = 15 * 1000
+// ONE combined snapshot request (metrics + players + fps history) per tick via
+// /api/server-snapshot — no separate metrics/roster polls, no runtime-adjustable
+// poll rates. Deployments can tune the cadence at BUILD time via
+// NEXT_PUBLIC_SNAPSHOT_POLL_SECONDS (default 15, clamped 5-120).
+const parsedSnapshotPollSeconds = Number.parseInt(process.env.NEXT_PUBLIC_SNAPSHOT_POLL_SECONDS ?? '', 10)
+const SNAPSHOT_POLL_INTERVAL_MS =
+  (Number.isFinite(parsedSnapshotPollSeconds) ? Math.min(Math.max(parsedSnapshotPollSeconds, 5), 120) : 15) * 1000
 
 const LEGACY_FPS_HISTORY_STORAGE_KEY = 'fpsHistory'
 const LEGACY_REFRESH_RATE_STORAGE_KEY = 'refreshRateOnlinePlayers'
