@@ -629,6 +629,11 @@ interface FpsHealthInput {
   currentFps: number | null
   hourMedian: number | null
   recentMedian: number | null
+  /** Median over the last ~60s of samples. The "is it dying RIGHT NOW" signal:
+   *  a single burst-dip sample can't move it (owner fix 2026-07-14 — the
+   *  instantaneous live-fps cap flashed Degraded for one tick on a 5s spike),
+   *  but a genuinely crashing server drags it under threshold within ~30s. */
+  lastMinuteMedian: number | null
   hourAvg: number | null
   under30Pct: number | null
   longestDipMs: number | null
@@ -679,9 +684,11 @@ function computeFpsHealth(input: FpsHealthInput): FpsHealthVerdict {
     components.dip * 0.15
 
   // Veto caps: [description, cap, tripped]. The tightest tripped cap wins.
+  // "Dying right now" uses the 1-MINUTE median, never a single live sample —
+  // one 5s burst dip must not flap the verdict (owner fix 2026-07-14).
   const caps: Array<[string, number, boolean]> = [
-    ['live FPS < 10', 35, input.currentFps != null && input.currentFps < 10],
-    ['live FPS < 15', 40, input.currentFps != null && input.currentFps < 15],
+    ['1-min median < 10', 35, input.lastMinuteMedian != null && input.lastMinuteMedian < 10],
+    ['1-min median < 15', 40, input.lastMinuteMedian != null && input.lastMinuteMedian < 15],
     ['10-min median < 25', 25, recent < 25],
     ['10-min median < 30', 35, recent < 30],
     ['10-min median < 45', 65, recent < 45],
@@ -861,10 +868,21 @@ function FpsHistoryGraph({
     return recentFps.length >= 12 ? medianOf(recentFps) : null
   })()
 
+  // 1-minute median: the flap-proof "dying right now" signal for the health
+  // caps. Needs >=6 samples (~30s) to mean anything.
+  const lastMinuteMedianFps = (() => {
+    const cutoff = now - 60_000
+    const lastMinuteFps = orderedSamples
+      .filter((sample) => sample.timestamp >= cutoff)
+      .map((sample) => sample.fps)
+    return lastMinuteFps.length >= 6 ? medianOf(lastMinuteFps) : null
+  })()
+
   const health = computeFpsHealth({
     currentFps,
     hourMedian: medianFps,
     recentMedian: recentMedianFps,
+    lastMinuteMedian: lastMinuteMedianFps,
     hourAvg: avgFps,
     under30Pct,
     longestDipMs,
