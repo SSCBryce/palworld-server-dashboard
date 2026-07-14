@@ -1,7 +1,9 @@
+import { Buffer } from 'node:buffer'
 import { NextRequest, NextResponse } from 'next/server'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { classifyPassword } from '@/lib/access-tier'
+import { getAnnounceEchoes, recordAnnounceEcho } from '@/lib/announce-echo'
 import { DEMO_MODE } from '@/lib/demo-mode'
 import { clientIp, isLockedOut, recordFailure } from '@/lib/rate-limit'
 import { PALWORLD_PROXY_HEADERS } from '@/lib/palworld'
@@ -39,6 +41,8 @@ export async function GET(request: NextRequest) {
         { type: 'join', ts: new Date(Date.now() - 600_000).toISOString(), name: 'LamballLarry' },
         { type: 'chat', ts: new Date(Date.now() - 420_000).toISOString(), name: 'CattivaCore', text: 'Demo server online.' },
         { type: 'chat', ts: new Date(Date.now() - 120_000).toISOString(), name: 'SparkitOps', text: 'Try announce, kick, ban, and restart safely.' },
+        // Demo sends are echoed too, so the chat console feels alive.
+        ...getAnnounceEchoes(),
       ],
     })
   }
@@ -69,5 +73,82 @@ export async function GET(request: NextRequest) {
     m = LEAVE_RE.exec(line)
     if (m) { events.push({ type: 'leave', ts: m[1]!, name: m[2]!.trim() }) }
   }
-  return NextResponse.json({ events: events.slice(-120) })
+  // Panel-sent announcements never appear in the journal (the server logs the
+  // announce call without its content), so merge in the server-side echo ring.
+  // The ts format is lexicographically sortable.
+  const merged = [...events, ...getAnnounceEchoes()].sort((a, b) => a.ts.localeCompare(b.ts))
+  return NextResponse.json({ events: merged.slice(-120) })
+}
+
+// Send a chat announcement AND echo it into the feed above. The panel sends
+// through here (not the generic /api/palworld proxy) so the echo is recorded
+// atomically with a successful send. ADMIN-tier only, like the rest of chat.
+export async function POST(request: NextRequest) {
+  const ip = clientIp(request)
+  if (isLockedOut(ip)) return NextResponse.json({ error: 'Too many attempts.' }, { status: 429 })
+  const pw = request.headers.get(PALWORLD_PROXY_HEADERS.adminPassword) ?? ''
+  const cls = classifyPassword(pw)
+  if (cls === 'unknown') recordFailure(ip)
+  if (cls !== 'admin') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  let message = ''
+  try {
+    const body = (await request.json()) as { message?: unknown }
+    message = typeof body.message === 'string' ? body.message.trim() : ''
+  } catch {
+    message = ''
+  }
+  if (!message || message.length > 1000) {
+    return NextResponse.json({ error: 'Invalid message' }, { status: 400 })
+  }
+
+  if (DEMO_MODE) {
+    // Demo mode never contacts a real server — record the echo so the sent
+    // message still shows up in the feed.
+    recordAnnounceEcho(message)
+    return NextResponse.json({ success: true })
+  }
+
+  // Upstream target is PINNED server-side; the game admin password comes from
+  // env — same posture as the proxy and snapshot routes.
+  const pinned = new URL(process.env.PALWORLD_REST_URL ?? 'http://127.0.0.1:8212')
+  const gameAdminPassword =
+    process.env.PALWORLD_ADMIN_PASSWORD ?? process.env.PALWORLD_REAL_ADMIN_PASSWORD ?? ''
+  if (!gameAdminPassword) {
+    return NextResponse.json(
+      { error: 'Server proxy is not configured (missing PALWORLD_ADMIN_PASSWORD).' },
+      { status: 500 }
+    )
+  }
+
+  try {
+    const response = await fetch(new URL('/v1/api/announce', pinned), {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        Authorization: `Basic ${Buffer.from(`admin:${gameAdminPassword}`).toString('base64')}`,
+      },
+      body: JSON.stringify({ message }),
+      cache: 'no-store',
+    })
+    if (!response.ok) {
+      const text = await response.text()
+      return NextResponse.json(
+        { error: `Server responded with ${response.status}: ${text}` },
+        { status: response.status }
+      )
+    }
+  } catch (error) {
+    console.error('Announce error:', error)
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Failed to connect to server' },
+      { status: 500 }
+    )
+  }
+
+  recordAnnounceEcho(message)
+  return NextResponse.json({ success: true })
 }
