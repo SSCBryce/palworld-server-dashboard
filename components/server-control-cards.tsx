@@ -917,27 +917,29 @@ function FpsHistoryGraph({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div>
-            <p className="font-mono text-[10px] uppercase tracking-[0.28em] text-muted-foreground">Server FPS</p>
-            <div className="mt-1 flex items-end gap-2">
-              <span className={cn('font-mono text-3xl font-semibold tracking-[0.08em]', currentFpsColorClass)}>
-                {currentFps != null ? currentFps.toFixed(1) : 'N/A'}
-              </span>
-              <span className="pb-1 font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">Live</span>
+        <div>
+          <p className="font-mono text-[10px] uppercase tracking-[0.28em] text-muted-foreground">Server FPS</p>
+          <div className="mt-1 flex items-end gap-2">
+            <span className={cn('font-mono text-3xl font-semibold tracking-[0.08em]', currentFpsColorClass)}>
+              {currentFps != null ? currentFps.toFixed(1) : 'N/A'}
+            </span>
+            <div className="flex flex-col items-start gap-1 pb-1">
+              {/* General health verdict (owner order 2026-07-14): blend + veto caps
+                  across all ring metrics — hover for the full breakdown. Sits
+                  stacked above the LIVE tag, right of the big number (owner
+                  placement order 2026-07-14). */}
+              <div
+                className={cn(
+                  'flex items-center gap-1.5 rounded-full border border-border/60 bg-secondary/35 px-2.5 py-0.5',
+                  health.colorClass
+                )}
+                title={health.detail}
+              >
+                <span className="h-2 w-2 rounded-full bg-current" />
+                <span className="font-mono text-[10px] uppercase tracking-[0.2em]">{health.label}</span>
+              </div>
+              <span className="font-mono text-xs uppercase tracking-[0.2em] text-muted-foreground">Live</span>
             </div>
-          </div>
-          {/* General health verdict (owner order 2026-07-14): blend + veto caps
-              across all ring metrics — hover for the full breakdown. */}
-          <div
-            className={cn(
-              'flex items-center gap-1.5 rounded-full border border-border/60 bg-secondary/35 px-2.5 py-1',
-              health.colorClass
-            )}
-            title={health.detail}
-          >
-            <span className="h-2 w-2 rounded-full bg-current" />
-            <span className="font-mono text-[10px] uppercase tracking-[0.2em]">{health.label}</span>
           </div>
         </div>
         <div className="flex items-center gap-3">
