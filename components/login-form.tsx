@@ -24,6 +24,8 @@ const VALIDATION_REQUEST_TIMEOUT_MS = 5_000
 const PINNED_SERVER_IP = '127.0.0.1'
 const PINNED_REST_API_PORT = '8212'
 const PINNED_GAME_PORT = '8211'
+const IS_DEMO_MODE = process.env.NEXT_PUBLIC_DEMO_MODE === '1'
+const DEMO_PASSWORD = process.env.NEXT_PUBLIC_DEMO_PASSWORD || 'demo'
 
 type ValidationState = 'idle' | 'checking' | 'valid' | 'invalid'
 
@@ -321,7 +323,9 @@ export function LoginForm() {
                 <div className="login-avatar-spark" />
               </div>
               <p className="mt-4 max-w-md text-sm text-muted-foreground">
-                Enter your operator password to bring the control grid online.
+                {IS_DEMO_MODE
+                  ? <>Demo password: <span className="font-mono text-foreground">{DEMO_PASSWORD}</span></>
+                  : 'Enter your operator password to bring the control grid online.'}
               </p>
             </div>
 
