@@ -37,6 +37,29 @@ function LastSeenCell({ online, lastSeen }: { online: boolean; lastSeen: string 
   return <span title={formatWorldDateTime(lastSeen)}>{formatRelativeTime(lastSeen)}</span>
 }
 
+// Shared clickable sort header (roster + guild tables).
+function SortHeaderButton({ label, active, dir, align = 'left', onClick }: {
+  label: string
+  active: boolean
+  dir: 'asc' | 'desc'
+  align?: 'left' | 'right'
+  onClick: () => void
+}) {
+  const Icon = active ? (dir === 'asc' ? ChevronUpIcon : ChevronDownIcon) : ChevronsUpDownIcon
+  return (
+    <th className={`px-4 py-3 font-medium ${align === 'right' ? 'text-right' : ''}`} aria-sort={active ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+      <button
+        type="button"
+        onClick={onClick}
+        className={`inline-flex select-none items-center gap-1 uppercase tracking-[0.18em] transition-colors hover:text-foreground ${active ? 'text-foreground' : ''} ${align === 'right' ? 'flex-row-reverse' : ''}`}
+      >
+        {label}
+        <Icon className={`h-3 w-3 ${active ? 'text-primary' : 'text-muted-foreground/50'}`} />
+      </button>
+    </th>
+  )
+}
+
 type RosterSortKey = 'nickname' | 'level' | 'pal_count' | 'last_seen'
 const ROSTER_DEFAULT_DIR: Record<RosterSortKey, 'asc' | 'desc'> = {
   nickname: 'asc',
@@ -76,22 +99,9 @@ function WorldRosterPanel({ players }: { players: WorldPlayer[] }) {
     return sort.dir === 'desc' ? sorted.reverse() : sorted
   }, [players, sort, onlineUids])
 
-  const SortHeader = ({ label, sortKey, align = 'left' }: { label: string; sortKey: RosterSortKey; align?: 'left' | 'right' }) => {
-    const active = sort.key === sortKey
-    const Icon = active ? (sort.dir === 'asc' ? ChevronUpIcon : ChevronDownIcon) : ChevronsUpDownIcon
-    return (
-      <th className={`px-4 py-3 font-medium ${align === 'right' ? 'text-right' : ''}`} aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
-        <button
-          type="button"
-          onClick={() => toggleSort(sortKey)}
-          className={`inline-flex select-none items-center gap-1 uppercase tracking-[0.18em] transition-colors hover:text-foreground ${active ? 'text-foreground' : ''} ${align === 'right' ? 'flex-row-reverse' : ''}`}
-        >
-          {label}
-          <Icon className={`h-3 w-3 ${active ? 'text-primary' : 'text-muted-foreground/50'}`} />
-        </button>
-      </th>
-    )
-  }
+  const SortHeader = ({ label, sortKey, align = 'left' }: { label: string; sortKey: RosterSortKey; align?: 'left' | 'right' }) => (
+    <SortHeaderButton label={label} active={sort.key === sortKey} dir={sort.dir} align={align} onClick={() => toggleSort(sortKey)} />
+  )
 
   return (
     <div className="max-h-[36rem] overflow-auto rounded-lg border border-border/50">
@@ -124,10 +134,40 @@ function WorldRosterPanel({ players }: { players: WorldPlayer[] }) {
   )
 }
 
+type GuildSortKey = 'name' | 'base_level' | 'base_count' | 'members'
+const GUILD_DEFAULT_DIR: Record<GuildSortKey, 'asc' | 'desc'> = {
+  name: 'asc',
+  base_level: 'desc',
+  base_count: 'desc',
+  members: 'desc',
+}
+
 function WorldGuildPanel({ guilds }: { guilds: WorldGuild[] }) {
   const onlineUids = useOnlineUids()
-  const sortedGuilds = [...guilds].sort((a, b) =>
-    b.base_level - a.base_level || a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }),
+  const [sort, setSort] = useState<{ key: GuildSortKey; dir: 'asc' | 'desc' }>({ key: 'base_level', dir: 'desc' })
+
+  const toggleSort = (key: GuildSortKey) =>
+    setSort((cur) => (cur.key === key
+      ? { key, dir: cur.dir === 'asc' ? 'desc' : 'asc' }
+      : { key, dir: GUILD_DEFAULT_DIR[key] }))
+
+  const sortedGuilds = useMemo(() => {
+    const byName = (a: WorldGuild, b: WorldGuild) =>
+      a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+    const cmp = (a: WorldGuild, b: WorldGuild) => {
+      switch (sort.key) {
+        case 'name': return byName(a, b)
+        case 'base_level': return a.base_level - b.base_level || byName(a, b)
+        case 'base_count': return a.base_count - b.base_count || byName(a, b)
+        case 'members': return a.members.length - b.members.length || byName(a, b)
+      }
+    }
+    const sorted = [...guilds].sort(cmp)
+    return sort.dir === 'desc' ? sorted.reverse() : sorted
+  }, [guilds, sort])
+
+  const SortHeader = ({ label, sortKey, align = 'left' }: { label: string; sortKey: GuildSortKey; align?: 'left' | 'right' }) => (
+    <SortHeaderButton label={label} active={sort.key === sortKey} dir={sort.dir} align={align} onClick={() => toggleSort(sortKey)} />
   )
 
   return (
@@ -135,10 +175,10 @@ function WorldGuildPanel({ guilds }: { guilds: WorldGuild[] }) {
       <table className="w-full min-w-[720px] border-collapse text-left text-sm">
         <thead className="sticky top-0 z-10 bg-card/95 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground backdrop-blur">
           <tr>
-            <th className="px-4 py-3 font-medium">Guild</th>
-            <th className="px-4 py-3 text-right font-medium">Base level</th>
-            <th className="px-4 py-3 text-right font-medium">Bases</th>
-            <th className="px-4 py-3 font-medium">Members</th>
+            <SortHeader label="Guild" sortKey="name" />
+            <SortHeader label="Base level" sortKey="base_level" align="right" />
+            <SortHeader label="Bases" sortKey="base_count" align="right" />
+            <SortHeader label="Members" sortKey="members" />
           </tr>
         </thead>
         <tbody className="divide-y divide-border/40">
