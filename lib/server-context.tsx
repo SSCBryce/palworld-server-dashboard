@@ -6,7 +6,7 @@ import type { ServerConfig, Player, ConsoleLog, ServerInfo, ServerMetrics, Banne
 
 type ConnectionStatus = 'disconnected' | 'checking' | 'connected'
 
-// FPS history is SERVER-SIDE (owner order 2026-07-13): palworld-fps-sampler.service
+// FPS history is SERVER-SIDE: palworld-fps-sampler.service
 // maintains the authoritative 1h ring (5s cadence) in /run/palworld-metrics and the
 // panel only fetches + displays it — the browser never collects.
 // These constants sanitize the fetched payload and must match the sampler.
@@ -396,7 +396,7 @@ export function ServerProvider({ children }: { children: ReactNode }) {
     }
   }, [config, addLog])
 
-  // ONE combined snapshot per tick (owner order 2026-07-14): /api/server-snapshot
+  // ONE combined snapshot per tick: /api/server-snapshot
   // returns metrics + players (+ the server-side 1h FPS ring for admin tier) in
   // a single request. The panel never polls those endpoints separately.
   const fetchSnapshot = useCallback(async () => {

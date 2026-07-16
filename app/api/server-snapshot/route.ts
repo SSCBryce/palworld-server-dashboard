@@ -1,4 +1,4 @@
-// Combined per-tick snapshot (owner order 2026-07-14): the panel makes ONE
+// Combined per-tick snapshot: the panel makes ONE
 // request every 15s and gets metrics + players (+ the server-side FPS ring for
 // admin tier) together, instead of polling separate endpoints on separate
 // timers. Upstream, PalServer has no combined REST endpoint, so the two reads
