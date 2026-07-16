@@ -794,7 +794,7 @@ export function LiveMap({ activeTab = 'map', onTabChange }: LiveMapProps) {
             baseMarkers.map(({ base, frac }) => (
               <div
                 key={base.id}
-                className="group pointer-events-auto absolute z-20"
+                className="group pointer-events-auto absolute z-20 hover:z-50"
                 style={{
                   left: `${ov.tx + frac.fx * MAP_BASIS * ov.scale}px`,
                   top: `${ov.ty + frac.fy * MAP_BASIS * ov.scale}px`,
@@ -813,7 +813,7 @@ export function LiveMap({ activeTab = 'map', onTabChange }: LiveMapProps) {
             offlinePlayerMarkers.map(({ player, frac }) => (
               <div
                 key={player.uid}
-                className="group pointer-events-auto absolute z-20 opacity-60 transition-opacity hover:z-40 hover:opacity-100"
+                className="group pointer-events-auto absolute z-20 opacity-60 transition-opacity hover:z-50 hover:opacity-100"
                 style={{
                   left: `${ov.tx + frac.fx * MAP_BASIS * ov.scale}px`,
                   top: `${ov.ty + frac.fy * MAP_BASIS * ov.scale}px`,

@@ -1,7 +1,7 @@
 'use client'
 
-import { Building2Icon, UsersIcon } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
+import { useMemo, useState } from 'react'
+import { Building2Icon, ChevronDownIcon, ChevronUpIcon, ChevronsUpDownIcon, UsersIcon } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { WorldDataStatus } from '@/components/world-data-status'
@@ -14,25 +14,94 @@ function canonicalUid(value: string) {
   return value.trim().toUpperCase()
 }
 
-function WorldRosterPanel({ players }: { players: WorldPlayer[] }) {
+function useOnlineUids() {
   const { players: onlinePlayers } = useServer()
-  const onlineUids = new Set(
-    onlinePlayers.map((player) => canonicalUid(player.playerId)).filter(Boolean),
+  return useMemo(
+    () => new Set(onlinePlayers.map((player) => canonicalUid(player.playerId)).filter(Boolean)),
+    [onlinePlayers],
   )
-  const sortedPlayers = [...players].sort((a, b) =>
-    b.level - a.level || a.nickname.localeCompare(b.nickname, undefined, { sensitivity: 'base' }),
-  )
+}
+
+// "Last seen" cell: online players show a live green state instead of a stale
+// relative time (the guild timestamp only advances on save events, so an online
+// player would read "6m ago" — owner UX call 2026-07-16). One column, one truth.
+function LastSeenCell({ online, lastSeen }: { online: boolean; lastSeen: string | null }) {
+  if (online) {
+    return (
+      <span className="inline-flex items-center gap-1.5 font-mono text-xs text-green-500">
+        <span className="status-dot h-1.5 w-1.5 rounded-full bg-green-500 shadow-[0_0_4px_rgba(34,197,94,0.6)]" />
+        Online
+      </span>
+    )
+  }
+  return <span title={formatWorldDateTime(lastSeen)}>{formatRelativeTime(lastSeen)}</span>
+}
+
+type RosterSortKey = 'nickname' | 'level' | 'pal_count' | 'last_seen'
+const ROSTER_DEFAULT_DIR: Record<RosterSortKey, 'asc' | 'desc'> = {
+  nickname: 'asc',
+  level: 'desc',
+  pal_count: 'desc',
+  last_seen: 'desc',
+}
+
+function WorldRosterPanel({ players }: { players: WorldPlayer[] }) {
+  const onlineUids = useOnlineUids()
+  const [sort, setSort] = useState<{ key: RosterSortKey; dir: 'asc' | 'desc' }>({ key: 'level', dir: 'desc' })
+
+  const toggleSort = (key: RosterSortKey) =>
+    setSort((cur) => (cur.key === key
+      ? { key, dir: cur.dir === 'asc' ? 'desc' : 'asc' }
+      : { key, dir: ROSTER_DEFAULT_DIR[key] }))
+
+  const sortedPlayers = useMemo(() => {
+    // last_seen sort value: online = most recent (now); missing timestamp = oldest.
+    const lastSeenValue = (p: WorldPlayer) => {
+      if (onlineUids.has(canonicalUid(p.uid))) return Number.POSITIVE_INFINITY
+      if (!p.last_seen) return Number.NEGATIVE_INFINITY
+      const t = Date.parse(p.last_seen)
+      return Number.isFinite(t) ? t : Number.NEGATIVE_INFINITY
+    }
+    const byName = (a: WorldPlayer, b: WorldPlayer) =>
+      a.nickname.localeCompare(b.nickname, undefined, { sensitivity: 'base' })
+    const cmp = (a: WorldPlayer, b: WorldPlayer) => {
+      switch (sort.key) {
+        case 'nickname': return byName(a, b)
+        case 'level': return a.level - b.level || byName(a, b)
+        case 'pal_count': return a.pal_count - b.pal_count || byName(a, b)
+        case 'last_seen': return lastSeenValue(a) - lastSeenValue(b) || byName(a, b)
+      }
+    }
+    const sorted = [...players].sort(cmp)
+    return sort.dir === 'desc' ? sorted.reverse() : sorted
+  }, [players, sort, onlineUids])
+
+  const SortHeader = ({ label, sortKey, align = 'left' }: { label: string; sortKey: RosterSortKey; align?: 'left' | 'right' }) => {
+    const active = sort.key === sortKey
+    const Icon = active ? (sort.dir === 'asc' ? ChevronUpIcon : ChevronDownIcon) : ChevronsUpDownIcon
+    return (
+      <th className={`px-4 py-3 font-medium ${align === 'right' ? 'text-right' : ''}`} aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+        <button
+          type="button"
+          onClick={() => toggleSort(sortKey)}
+          className={`inline-flex select-none items-center gap-1 uppercase tracking-[0.18em] transition-colors hover:text-foreground ${active ? 'text-foreground' : ''} ${align === 'right' ? 'flex-row-reverse' : ''}`}
+        >
+          {label}
+          <Icon className={`h-3 w-3 ${active ? 'text-primary' : 'text-muted-foreground/50'}`} />
+        </button>
+      </th>
+    )
+  }
 
   return (
     <div className="max-h-[36rem] overflow-auto rounded-lg border border-border/50">
       <table className="w-full min-w-[660px] border-collapse text-left text-sm">
         <thead className="sticky top-0 z-10 bg-card/95 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground backdrop-blur">
           <tr>
-            <th className="px-4 py-3 font-medium">Nickname</th>
-            <th className="px-4 py-3 text-right font-medium">Level</th>
-            <th className="px-4 py-3 text-right font-medium">Pals</th>
-            <th className="px-4 py-3 font-medium">Last seen</th>
-            <th className="px-4 py-3 text-right font-medium">Status</th>
+            <SortHeader label="Nickname" sortKey="nickname" />
+            <SortHeader label="Level" sortKey="level" align="right" />
+            <SortHeader label="Pals" sortKey="pal_count" align="right" />
+            <SortHeader label="Last seen" sortKey="last_seen" />
           </tr>
         </thead>
         <tbody className="divide-y divide-border/40">
@@ -43,18 +112,8 @@ function WorldRosterPanel({ players }: { players: WorldPlayer[] }) {
                 <td className="max-w-72 truncate px-4 py-3 font-medium text-foreground">{player.nickname || 'Unnamed player'}</td>
                 <td className="px-4 py-3 text-right font-mono tabular-nums text-foreground">{player.level}</td>
                 <td className="px-4 py-3 text-right font-mono tabular-nums text-foreground">{player.pal_count}</td>
-                <td className="px-4 py-3 font-mono text-xs text-muted-foreground" title={formatWorldDateTime(player.last_seen)}>
-                  {formatRelativeTime(player.last_seen)}
-                </td>
-                <td className="px-4 py-3 text-right">
-                  <Badge
-                    variant="outline"
-                    className={online
-                      ? 'border-green-500/45 bg-green-500/10 font-mono text-[10px] uppercase tracking-[0.14em] text-green-500'
-                      : 'border-border/60 bg-muted/20 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground'}
-                  >
-                    {online ? 'Online' : 'Offline'}
-                  </Badge>
+                <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
+                  <LastSeenCell online={online} lastSeen={player.last_seen} />
                 </td>
               </tr>
             )
@@ -66,6 +125,7 @@ function WorldRosterPanel({ players }: { players: WorldPlayer[] }) {
 }
 
 function WorldGuildPanel({ guilds }: { guilds: WorldGuild[] }) {
+  const onlineUids = useOnlineUids()
   const sortedGuilds = [...guilds].sort((a, b) =>
     b.base_level - a.base_level || a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }),
   )
@@ -95,16 +155,26 @@ function WorldGuildPanel({ guilds }: { guilds: WorldGuild[] }) {
                   <span className="text-xs text-muted-foreground">No members</span>
                 ) : (
                   <div className="flex flex-wrap gap-1.5">
-                    {guild.members.map((member) => (
-                      <span
-                        key={member.uid}
-                        className="rounded-md border border-border/50 bg-muted/20 px-2 py-1 text-xs text-foreground"
-                        title={`${member.nickname || 'Unnamed player'} · last seen ${formatWorldDateTime(member.last_seen)}`}
-                      >
-                        {member.nickname || 'Unnamed player'}
-                        <span className="ml-1.5 font-mono text-[10px] text-muted-foreground">{formatRelativeTime(member.last_seen)}</span>
-                      </span>
-                    ))}
+                    {guild.members.map((member) => {
+                      const online = onlineUids.has(canonicalUid(member.uid))
+                      return (
+                        <span
+                          key={member.uid}
+                          className="rounded-md border border-border/50 bg-muted/20 px-2 py-1 text-xs text-foreground"
+                          title={online ? `${member.nickname || 'Unnamed player'} · online now` : `${member.nickname || 'Unnamed player'} · last seen ${formatWorldDateTime(member.last_seen)}`}
+                        >
+                          {member.nickname || 'Unnamed player'}
+                          {online ? (
+                            <span className="ml-1.5 inline-flex items-center gap-1 font-mono text-[10px] text-green-500">
+                              <span className="status-dot h-1 w-1 rounded-full bg-green-500 shadow-[0_0_4px_rgba(34,197,94,0.6)]" />
+                              Online
+                            </span>
+                          ) : (
+                            <span className="ml-1.5 font-mono text-[10px] text-muted-foreground">{formatRelativeTime(member.last_seen)}</span>
+                          )}
+                        </span>
+                      )
+                    })}
                   </div>
                 )}
               </td>
